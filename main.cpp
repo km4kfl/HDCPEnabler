@@ -373,6 +373,14 @@ HRESULT ComputeOMAC(
     return S_OK;
 }
 
+#define STR(x) #x
+#define STR2(x) STR(x)
+// TODO: replace everything with this nice macro to automate building the error message and help with errors across
+//       different versions
+#define THROW_MSG(exp) __FUNCTION__ ":" __FILE__ ":" STR2(__LINE__) ":" STR(exp)
+#define HRESULT_THROW(exp) if (FAILED((exp))) { throw ProcessFailure(THROW_MSG(exp)); }
+#define BOOL_THROW(exp) if ((exp) == FALSE) { throw ProcessFailure(THROW_MSG(exp)); }
+
 class HDCPHelper {
 private:
     CryptContext            h_crypt_prov;
@@ -396,38 +404,27 @@ public:
     }
 
     HDCPHelper() {
-        if (CryptAcquireContext(h_crypt_prov.GetPointer(), NULL, NULL, PROV_RSA_AES, 0) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptAcquireContext");
-        }
+        BOOL_THROW(CryptAcquireContext(h_crypt_prov.GetPointer(), NULL, NULL, PROV_RSA_AES, 0));
 
         DWORD dw_flag = (0x80 << 16) | CRYPT_EXPORTABLE;
 
-        if (CryptGenKey(h_crypt_prov.GetHandle(), CALG_AES_128, dw_flag, m_h_aes_key.GetPointer()) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptGenKey");
-        }
+        BOOL_THROW(CryptGenKey(h_crypt_prov.GetHandle(), CALG_AES_128, dw_flag, m_h_aes_key.GetPointer()));
 
         DWORD cb_data = 0;
 
-        if (CryptExportKey(m_h_aes_key.GetHandle(), 0, PLAINTEXTKEYBLOB, 0, NULL, &cb_data) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptExportKey");
-        }
-
-        if (cb_data != sizeof(BLOBHEADER) + 4 + 16) {
-            throw ProcessFailure(__FUNCTION__ ": cb_data != sizeof(BLOBHEADER) + 4 + 16");
-        }
+        BOOL_THROW(CryptExportKey(m_h_aes_key.GetHandle(), 0, PLAINTEXTKEYBLOB, 0, NULL, &cb_data));
+        BOOL_THROW(cb_data == sizeof(BLOBHEADER) + 4 + 16);
 
         aes_key.resize(cb_data);
 
-        if (CryptExportKey(
-            m_h_aes_key.GetHandle(), 
-            0, 
-            PLAINTEXTKEYBLOB, 
-            0, 
+        BOOL_THROW(CryptExportKey(
+            m_h_aes_key.GetHandle(),
+            0,
+            PLAINTEXTKEYBLOB,
+            0,
             aes_key.data(),
             &cb_data
-        ) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptExportKey");
-        }
+        ));
 
         CopyMemory(
             aes_key.data(), 
@@ -437,17 +434,9 @@ public:
 
         aes_key.resize(16);
 
-        if (CryptGenRandom(h_crypt_prov.GetHandle(), sizeof(UINT), (BYTE*)&u_status_seq) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptGenRandom[1]");
-        }
-
-        if (CryptGenRandom(h_crypt_prov.GetHandle(), sizeof(UINT), (BYTE*)&u_command_seq) == FALSE) {
-            throw ProcessFailure(__FUNCTION__ ": CryptGenRandom[2]");
-        }
-
-        if (FAILED(CoInitialize(0))) {
-            throw ProcessFailure(__FUNCTION__ ": CoInitialize");
-        }
+        BOOL_THROW(CryptGenRandom(h_crypt_prov.GetHandle(), sizeof(UINT), (BYTE*)&u_status_seq));
+        BOOL_THROW(CryptGenRandom(h_crypt_prov.GetHandle(), sizeof(UINT), (BYTE*)&u_command_seq));
+        HRESULT_THROW(CoInitialize(0));
 
         com_graph = COMIFaceWrapper<IGraphBuilder>(
             CLSID_FilterGraph,
@@ -463,24 +452,24 @@ public:
             IID_IBaseFilter
         );
 
-        if (FAILED(com_graph->AddFilter(com_renderer.Object(), L"VMR9"))) {
-            throw ProcessFailure(__FUNCTION__ ": AddFilter");
-        }
+        HRESULT_THROW(com_graph->AddFilter(com_renderer.Object(), L"VMR9"));
 
-        if (FAILED(
+        std::ofstream trash_file("trash.avi");
+        trash_file << "abc";
+        trash_file.close();
+
+        HRESULT_THROW(
             com_graph->AddSourceFilter(
-                L"D:\\trash.avi",
+                L"trash.avi",
                 L"Source1",
                 com_source.Pointer()
-            ))) {
-            throw ProcessFailure(__FUNCTION__ ": AddSourceFilter");
-        }
+            )
+        );
 
-        if (FAILED(com_renderer->QueryInterface(
+        HRESULT_THROW(com_renderer->QueryInterface(
             IID_IAMCertifiedOutputProtection,
-            (void**)com_copp.Pointer()))) {
-            throw ProcessFailure(__FUNCTION__ ": QueryInterface");
-        }
+            (void**)com_copp.Pointer())
+        );
 
         com_builder = COMIFaceWrapper<ICaptureGraphBuilder2>(
             CLSID_CaptureGraphBuilder2,
@@ -489,9 +478,7 @@ public:
             IID_ICaptureGraphBuilder2
         );
 
-        if (FAILED(com_builder->SetFiltergraph(com_graph.Object()))) {
-            throw ProcessFailure(__FUNCTION__ ": SetFiltergraph");
-        }
+        HRESULT_THROW(com_builder->SetFiltergraph(com_graph.Object()));
 
         if (FAILED(com_builder->RenderStream(
             0, 
@@ -511,12 +498,13 @@ public:
         }
 
         {
-            BYTE *p;
-            DWORD sz;
-            com_copp->KeyExchange(&driver_guid_random, &p, &sz);
-            if (p == NULL) {
-                throw ProcessFailure(__FUNCTION__ ": KeyExchange");
-            }
+            BYTE* p = NULL;
+            DWORD sz = 0;
+
+            HRESULT_THROW(com_copp->KeyExchange(&driver_guid_random, &p, &sz));
+
+            BOOL_THROW(p != NULL);
+
             driver_cert_chain.resize(sz);
             CopyMemory(driver_cert_chain.data(), p, sz);
             CoTaskMemFree(p);
@@ -588,7 +576,7 @@ public:
             rsa->pubexp = 0x010001;
             rsa->bitlen = sizeof(nvidia_pubkey) * 8;
 
-            if (CryptImportKey(
+            BOOL_THROW(CryptImportKey(
                 h_crypt_prov.GetHandle(),
                 pkstruct.data(),
                 range_check<DWORD, size_t>(
@@ -599,13 +587,11 @@ public:
                 0,
                 0,
                 h_driver_public_key.GetPointer()
-            ) == FALSE) {
-                throw ProcessFailure(__FUNCTION__ ": CryptImportKey[public-key]");
-            }
+            ));
 
             DWORD crypt_in_out_sz = actual_data_sz;
 
-            if (CryptEncrypt(
+            BOOL_THROW(CryptEncrypt(
                 h_driver_public_key.GetHandle(),
                 NULL,
                 TRUE,
@@ -617,20 +603,14 @@ public:
                     0,
                     0xffffff
                 )
-            ) == FALSE) {
-                throw ProcessFailure(__FUNCTION__ ": CryptEncrypt");
-            }
+            ));
         }
 
-        if (copp_sig_buf.capacity() != sizeof(AMCOPPSignature)) {
-            throw ProcessFailure(__FUNCTION__ ": copp_sig_buf.capacity != sizeof(..)");
-        }
+        BOOL_THROW(copp_sig_buf.capacity() == sizeof(AMCOPPSignature));
 
-        if (FAILED(com_copp->SessionSequenceStart(
+        HRESULT_THROW(com_copp->SessionSequenceStart(
             (AMCOPPSignature*)copp_sig_buf.data()
-        ))) {
-            throw ProcessFailure(__FUNCTION__ ": SessionSequenceStart");
-        }
+        ));
     }
 
     void SetHDCPMaxLevel() {
@@ -646,20 +626,16 @@ public:
         copp_cmd.dwSequence = u_command_seq++;
         copp_cmd.cbSizeData = sizeof(*spl_cd);
 
-        if (sizeof(copp_cmd.macKDI) != OPM_OMAC_SIZE) {
-            throw ProcessFailure(__FUNCTION__ ": sizeof(copp_cmd.macKDI) != OPM_MAC_SIZE");
-        }
+        BOOL_THROW(sizeof(copp_cmd.macKDI) == OPM_OMAC_SIZE);
 
-        ComputeOMAC(
+        HRESULT_THROW(ComputeOMAC(
             aes_key.data(),
             (PUCHAR)&copp_cmd.macKDI + sizeof(copp_cmd.macKDI),
             sizeof(copp_cmd) - sizeof(copp_cmd.macKDI),
             (PUCHAR)&copp_cmd.macKDI
-        );
+        ));
 
-        if (FAILED(com_copp->ProtectionCommand(&copp_cmd))) {
-            throw ProcessFailure(__FUNCTION__ ": ProtectionCommand");
-        }
+        HRESULT_THROW(com_copp->ProtectionCommand(&copp_cmd));
     }
 
     int GetHDCPLevel() {
@@ -671,9 +647,7 @@ public:
         i.cbSizeData = 4;
         i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
         i.dwSequence = u_status_seq++;
-        if (FAILED(com_copp->ProtectionStatus(&i, &o))) {
-            throw ProcessFailure(__FUNCTION__ ": GetHDCPLevel");
-        }
+        HRESULT_THROW(com_copp->ProtectionStatus(&i, &o));
         
         auto reply = (DXVA_COPPStatusData*)&o.COPPStatus[0];
 
