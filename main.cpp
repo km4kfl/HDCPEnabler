@@ -381,6 +381,64 @@ HRESULT ComputeOMAC(
 #define HRESULT_THROW(exp) if (FAILED((exp))) { throw ProcessFailure(THROW_MSG(exp)); }
 #define BOOL_THROW(exp) if ((exp) == FALSE) { throw ProcessFailure(THROW_MSG(exp)); }
 
+const char* BASE64_DECODE = "=ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
+std::vector<BYTE> decode_base64_str(std::vector<BYTE> in) {
+    unsigned int bits = 0;
+    unsigned int bits_c = 0;
+
+    auto out = std::vector<BYTE>();
+
+    for (size_t x = 4; x < in.size() + 1; x += 4) {
+        int a = in[x - 4];
+        int b = in[x - 3];
+        int c = in[x - 2];
+        int d = in[x - 1];
+
+        const char* a_c = strchr(BASE64_DECODE, a);
+        const char* b_c = strchr(BASE64_DECODE, b);
+        const char* c_c = strchr(BASE64_DECODE, c);
+        const char* d_c = strchr(BASE64_DECODE, d);
+
+        BOOL_THROW(a != NULL);
+        BOOL_THROW(b != NULL);
+        BOOL_THROW(c != NULL);
+        BOOL_THROW(d != NULL);
+
+        int _a_i = (a_c - BASE64_DECODE);
+        int _b_i = (b_c - BASE64_DECODE);
+        int _c_i = (c_c - BASE64_DECODE);
+        int _d_i = (d_c - BASE64_DECODE);
+
+        // padding = is special value (zero)
+        int a_i = _a_i > 0 ? _a_i - 1 : _a_i;
+        int b_i = _b_i > 0 ? _b_i - 1 : _b_i;
+        int c_i = _c_i > 0 ? _c_i - 1 : _c_i;
+        int d_i = _d_i > 0 ? _d_i - 1 : _d_i;
+
+        int whole = 
+            (a_i << (6 * 3)) | 
+            (b_i << (6 * 2)) | 
+            (c_i << (6 * 1)) | 
+            (d_i << (6 * 0));
+
+        int b0 = whole >> 16;
+        int b1 = (whole >> 8) & 0xff;
+        int b2 = whole & 0xff;
+
+         // only output a byte if there was at least
+        // one non padding input
+        if (_b_i != 0)
+            out.push_back((BYTE)b0);
+        if (_c_i != 0)
+            out.push_back((BYTE)b1);
+        if (_d_i != 0)
+            out.push_back((BYTE)b2);
+    }
+
+    return out;
+}
+
 class HDCPHelper {
 private:
     CryptContext            h_crypt_prov;
@@ -404,7 +462,7 @@ public:
     }
 
     HDCPHelper() {
-        BOOL_THROW(CryptAcquireContext(h_crypt_prov.GetPointer(), NULL, NULL, PROV_RSA_AES, 0));
+        BOOL_THROW(CryptAcquireContext(h_crypt_prov.GetPointer(), NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT));
 
         DWORD dw_flag = (0x80 << 16) | CRYPT_EXPORTABLE;
 
@@ -497,6 +555,8 @@ public:
             //throw ProcessFailure();
         }
 
+        std::vector<BYTE> pubkey_bytes;
+
         {
             BYTE* p = NULL;
             DWORD sz = 0;
@@ -504,6 +564,28 @@ public:
             HRESULT_THROW(com_copp->KeyExchange(&driver_guid_random, &p, &sz));
 
             BOOL_THROW(p != NULL);
+            BOOL_THROW(sz != 0);
+
+            {
+                std::vector<BYTE> pubkey_str;
+                //<Modulus>tQp6DeLDMuJAE4x0kFejpr/iE45QQ0sS90bDtXgjvT/CMq2lJtssx6kArcx9O2SrGIfQmSWQOzmA3FMeS6KmwCTs6y+wYD1iuSVdz7725UlKx0oL6pRnNgs+AzDZC9erspo/IeNHuEQ1sLeCM8qaKvi0XaLUlJeclXawWOi6r3d3p+PQndnwfXMRoXKcY0xgqi4Hjt0qbB4hq7J8BD2MiA0RFUQjc1jI7Hs5v7f3cZ6bEexBhyG/zRRbHtm8dXTGL1GRK+ApHRQgALT3NaEuRjfnSMeLQP/R+Jxug7pw4T18j+GV/HX0Ihr7QP2T3PtcgoCYY2agjTHehAG4TzRjAw==</Modulus>
+                const char *start_delim = "<Modulus>";
+                const char *end_delim = "</Modulus>";
+
+                char *pubkey_start = strstr((char*)p, start_delim);
+                const char *pubkey_end = strstr((char*)p, end_delim);
+
+                BOOL_THROW(pubkey_start != NULL);
+                BOOL_THROW(pubkey_end != NULL);
+
+                pubkey_start += strlen(start_delim);
+
+                size_t pubkey_len = pubkey_end - pubkey_start;
+
+                pubkey_str = std::vector<BYTE>(pubkey_len + 1);
+                memcpy(pubkey_str.data(), pubkey_start, pubkey_len);
+                pubkey_bytes = decode_base64_str(pubkey_str);
+            }
 
             driver_cert_chain.resize(sz);
             CopyMemory(driver_cert_chain.data(), p, sz);
@@ -537,6 +619,7 @@ public:
         }
 
         {
+            /*
             const BYTE nvidia_pubkey[] = {
                 164, 211, 33, 236, 168, 70, 180, 222, 217, 79, 254, 72, 149, 205,
                 216, 98, 39, 12, 123, 22, 136, 22, 84, 104, 143, 3, 149, 37, 217,
@@ -557,16 +640,17 @@ public:
                 134, 250, 148, 99, 216, 17, 103, 203, 29, 231, 118, 29, 149, 204,
                 137, 193, 36, 200, 133
             };
+            */
 
             const DWORD pkstruct_sz = sizeof(BLOBHEADER) + sizeof(RSAPUBKEY) +
-                                      sizeof(nvidia_pubkey);
+                                pubkey_bytes.size();
             auto pkstruct = std::vector<BYTE>(pkstruct_sz);
             BLOBHEADER* hdr = (BLOBHEADER*)pkstruct.data();
             RSAPUBKEY* rsa = (RSAPUBKEY*)(pkstruct.data() + sizeof(BLOBHEADER));
             CopyMemoryReverse(
                 pkstruct.data() + sizeof(BLOBHEADER) + sizeof(RSAPUBKEY),
-                nvidia_pubkey,
-                sizeof(nvidia_pubkey)
+                pubkey_bytes.data(),
+                pubkey_bytes.size()
             );
 
             hdr->bType = PUBLICKEYBLOB;
@@ -574,7 +658,7 @@ public:
             hdr->aiKeyAlg = CALG_RSA_KEYX;
             rsa->magic = 0x31415352;
             rsa->pubexp = 0x010001;
-            rsa->bitlen = sizeof(nvidia_pubkey) * 8;
+            rsa->bitlen = pubkey_bytes.size() * 8;
 
             BOOL_THROW(CryptImportKey(
                 h_crypt_prov.GetHandle(),
@@ -645,7 +729,8 @@ public:
         ZeroMemory(&o, sizeof(o));
         ((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_HDCP;
         i.cbSizeData = 4;
-        i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
+        //i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
+        i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
         i.dwSequence = u_status_seq++;
         HRESULT_THROW(com_copp->ProtectionStatus(&i, &o));
         
@@ -654,7 +739,7 @@ public:
         return range_check<int, ULONG>(
             reply->dwData,
             0,
-            2
+            1
         );
     }
 
@@ -665,17 +750,32 @@ public:
 class System {
 private:
     std::ofstream log_stream;
+    int hdcp_last_level;
 public:
     std::unique_ptr<HDCPHelper> hdcp;
 
-    System() : log_stream("hdcp_log.txt") {
+    System() : log_stream("hdcp_log.txt"), hdcp_last_level(-1) {
         try {
             hdcp = std::unique_ptr<HDCPHelper>(new HDCPHelper());
         }
         catch (ProcessFailure e) {
+            auto mbuf = std::vector<CHAR>(1024);
+            auto last_error = GetLastError();
+
+            FormatMessageA(
+                FORMAT_MESSAGE_FROM_SYSTEM,
+                0,
+                last_error,
+                0,
+                mbuf.data(),
+                mbuf.capacity(),
+                0
+            );
+
             std::ostringstream s;
             s << "Constructor(System) Process Failure for HDCPHelper: "
-                << e.GetMessage();
+                << e.GetMessage() << " [" << GetLastError() << "]"
+                << "LastError [" << last_error << "]: " << mbuf.data();
             log_write(s.str());
             throw ProcessFailure(s.str());
         }
@@ -687,6 +787,47 @@ public:
 
     void log_write(std::string msg) {
         log_stream << msg.data() << std::endl;
+    }
+
+    void hdcp_level_notify(int level) {
+        if (hdcp_last_level != level) {
+            std::ostringstream s;
+            auto now = std::chrono::system_clock::now();
+            std::time_t now_time = std::chrono::system_clock::to_time_t(now);
+            auto time_buf = std::vector<char>(256);
+            ctime_s(time_buf.data(), time_buf.capacity(), &now_time);
+            s << time_buf.data() << " HDCP level is " << level << ".";
+            log_write(s.str());
+            hdcp_last_level = level;
+        }
+    }
+
+    void hdcp_interval_work() {
+        try {
+            int hdcp_pre_level = hdcp->GetHDCPLevel();
+
+            hdcp_level_notify(hdcp_pre_level);
+
+            if (hdcp_pre_level == 0) {
+                hdcp->SetHDCPMaxLevel();
+                int hdcp_post_level = hdcp->GetHDCPLevel();
+                hdcp_level_notify(hdcp_post_level);
+            }
+        }
+        catch (ProcessFailure e) {
+            std::ostringstream s;
+            s << "HDCP Process Failure: " << e.GetMessage() << " [" << GetLastError() << "]";
+            log_write(s.str());
+
+            try {
+                hdcp = std::unique_ptr<HDCPHelper>(new HDCPHelper());
+            }
+            catch (ProcessFailure e) {
+                s = std::ostringstream();
+                s << "HDCP Process Failure on Reinit: " << e.GetMessage();
+                log_write(s.str());
+            }
+        }
     }
 };
 
@@ -816,36 +957,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_TIMER:
         switch (wParam) {
             case IDT_TIMER1:
-                try {
-                    int hdcp_pre_level = g_sys->hdcp->GetHDCPLevel();
-
-                    std::ostringstream s;
-                    //s << "hdcp_pre_level=" << hdcp_pre_level;
-                    //g_sys->log_write(s.str());
-
-                    if (hdcp_pre_level == 0) {
-                        g_sys->hdcp->SetHDCPMaxLevel();
-                        int hdcp_post_level = g_sys->hdcp->GetHDCPLevel();
-                        s = std::ostringstream();
-
-                        auto now = std::chrono::system_clock::now();
-                        std::time_t now_time = std::chrono::system_clock::to_time_t(now);
-
-                        auto time_buf = std::vector<char>(256);
-                        ctime_s(time_buf.data(), time_buf.capacity(), &now_time);
-                        // TODO: figure out why this create an extra newline after the time_buf
-                        s << time_buf.data() << std::endl;
-                        s << "hdcp_post_level=" << hdcp_post_level;
-                        g_sys->log_write(s.str());
-                    }
-                }
-                catch (ProcessFailure e) {
-                    std::ostringstream s;
-                    s << "HDCP Process Failure: " << e.GetMessage();
-                    g_sys->log_write(s.str());
-
-                    g_sys->hdcp = std::unique_ptr<HDCPHelper>(new HDCPHelper());
-                }
+                g_sys->hdcp_interval_work();
                 break;
         }
         break;
