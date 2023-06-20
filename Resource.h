@@ -12,6 +12,7 @@
 #define IDR_MAINFRAME                   128
 #define IDI_ICON1                       130
 #define IDT_TIMER1                      150
+#define IDT_TIMER2                      151
 #define IDC_STATUS_MSG_GLOBAL           1001
 #define IDC_STATUS_MSG_LOCAL            1002
 #define IDC_STATIC                      -1
