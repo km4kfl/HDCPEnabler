@@ -1,0 +1,4 @@
+Tue Jun 20 00:31:32 2023
+ HDCP level is 0.
+Tue Jun 20 00:31:32 2023
+ HDCP level is 1.

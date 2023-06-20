@@ -456,12 +456,9 @@ private:
 
     GUID                    driver_guid_random;
     std::vector<BYTE>       driver_cert_chain;
-public:
-    HDCPHelper& operator=(HDCPHelper&& other) noexcept {
-        return *this;
-    }
+    bool                    initialized;
 
-    HDCPHelper() {
+    void Initialize() {
         BOOL_THROW(CryptAcquireContext(h_crypt_prov.GetPointer(), NULL, NULL, PROV_RSA_AES, CRYPT_VERIFYCONTEXT));
 
         DWORD dw_flag = (0x80 << 16) | CRYPT_EXPORTABLE;
@@ -485,8 +482,8 @@ public:
         ));
 
         CopyMemory(
-            aes_key.data(), 
-            aes_key.data() + sizeof(BLOBHEADER) + sizeof(DWORD), 
+            aes_key.data(),
+            aes_key.data() + sizeof(BLOBHEADER) + sizeof(DWORD),
             16
         );
 
@@ -539,10 +536,10 @@ public:
         HRESULT_THROW(com_builder->SetFiltergraph(com_graph.Object()));
 
         if (FAILED(com_builder->RenderStream(
-            0, 
-            0, 
-            com_source.Object(), 
-            0, 
+            0,
+            0,
+            com_source.Object(),
+            0,
             com_renderer.Object()
         ))) {
             // TODO: This doesn't seem to require a success
@@ -551,7 +548,7 @@ public:
             // future it might be required to finish out
             // this process of displaying protected content
             // so I am leaving this here.
-            
+
             //throw ProcessFailure();
         }
 
@@ -569,11 +566,11 @@ public:
             {
                 std::vector<BYTE> pubkey_str;
                 //<Modulus>tQp6DeLDMuJAE4x0kFejpr/iE45QQ0sS90bDtXgjvT/CMq2lJtssx6kArcx9O2SrGIfQmSWQOzmA3FMeS6KmwCTs6y+wYD1iuSVdz7725UlKx0oL6pRnNgs+AzDZC9erspo/IeNHuEQ1sLeCM8qaKvi0XaLUlJeclXawWOi6r3d3p+PQndnwfXMRoXKcY0xgqi4Hjt0qbB4hq7J8BD2MiA0RFUQjc1jI7Hs5v7f3cZ6bEexBhyG/zRRbHtm8dXTGL1GRK+ApHRQgALT3NaEuRjfnSMeLQP/R+Jxug7pw4T18j+GV/HX0Ihr7QP2T3PtcgoCYY2agjTHehAG4TzRjAw==</Modulus>
-                const char *start_delim = "<Modulus>";
-                const char *end_delim = "</Modulus>";
+                const char* start_delim = "<Modulus>";
+                const char* end_delim = "</Modulus>";
 
-                char *pubkey_start = strstr((char*)p, start_delim);
-                const char *pubkey_end = strstr((char*)p, end_delim);
+                char* pubkey_start = strstr((char*)p, start_delim);
+                const char* pubkey_end = strstr((char*)p, end_delim);
 
                 BOOL_THROW(pubkey_start != NULL);
                 BOOL_THROW(pubkey_end != NULL);
@@ -591,7 +588,7 @@ public:
             CopyMemory(driver_cert_chain.data(), p, sz);
             CoTaskMemFree(p);
         }
-       
+
         auto copp_sig_buf = std::vector<BYTE>(sizeof(AMCOPPSignature));
         DWORD actual_data_sz = 0;
 
@@ -609,7 +606,7 @@ public:
             s->guid_random = driver_guid_random;
             CopyMemory(
                 &s->aes_key,
-                aes_key.data(), 
+                aes_key.data(),
                 min(sizeof(s->aes_key), aes_key.capacity())
             );
             s->u_status_seq = u_status_seq;
@@ -619,31 +616,8 @@ public:
         }
 
         {
-            /*
-            const BYTE nvidia_pubkey[] = {
-                164, 211, 33, 236, 168, 70, 180, 222, 217, 79, 254, 72, 149, 205,
-                216, 98, 39, 12, 123, 22, 136, 22, 84, 104, 143, 3, 149, 37, 217,
-                208, 39, 242, 194, 103, 238, 25, 135, 93, 84, 37, 179, 23, 168, 170,
-                141, 228, 92, 176, 73, 107, 130, 251, 199, 32, 24, 81, 54, 182, 231,
-                33, 200, 36, 95, 54, 254, 35, 213, 173, 109, 42, 7, 147, 189, 227,
-                170, 141, 250, 169, 188, 29, 118, 163, 111, 70, 173, 105, 55, 205,
-                1, 214, 106, 253, 44, 115, 180, 219, 172, 172, 111, 177, 108, 109,
-                130, 68, 118, 189, 14, 229, 36, 188, 172, 236, 231, 232, 41, 7, 83,
-                223, 227, 66, 40, 133, 83, 39, 10, 179, 45, 197, 158, 48, 123, 63,
-                211, 114, 214, 184, 179, 20, 123, 206, 179, 174, 74, 230, 127, 3,
-                134, 195, 44, 94, 122, 1, 68, 46, 192, 101, 72, 44, 18, 92, 63, 152,
-                111, 83, 113, 66, 45, 170, 80, 15, 103, 162, 90, 169, 174, 177, 51,
-                56, 69, 137, 43, 152, 78, 123, 216, 194, 85, 100, 159, 53, 237, 130,
-                111, 167, 96, 101, 154, 90, 96, 16, 117, 61, 134, 138, 115, 78, 106,
-                243, 63, 211, 244, 23, 243, 71, 21, 196, 161, 21, 203, 136, 116, 50,
-                3, 129, 106, 90, 78, 7, 228, 197, 13, 237, 145, 208, 215, 34, 227,
-                134, 250, 148, 99, 216, 17, 103, 203, 29, 231, 118, 29, 149, 204,
-                137, 193, 36, 200, 133
-            };
-            */
-
             const DWORD pkstruct_sz = sizeof(BLOBHEADER) + sizeof(RSAPUBKEY) +
-                                pubkey_bytes.size();
+                pubkey_bytes.size();
             auto pkstruct = std::vector<BYTE>(pkstruct_sz);
             BLOBHEADER* hdr = (BLOBHEADER*)pkstruct.data();
             RSAPUBKEY* rsa = (RSAPUBKEY*)(pkstruct.data() + sizeof(BLOBHEADER));
@@ -697,9 +671,29 @@ public:
         ));
     }
 
-    void SetHDCPMaxLevel() {
+    void InitializeOrNoop() {
+        if (!initialized) {
+            initialized = true;
+            Initialize();
+        }
+    }
+
+public:
+    HDCPHelper& operator=(HDCPHelper&& other) noexcept {
+        return *this;
+    }
+
+    HDCPHelper() {
+        initialized = false;
+        memset(&driver_guid_random, 0, sizeof(driver_guid_random));
+        u_command_seq = 0;
+        u_status_seq = 0;
+    }
+
+    void RequestHDCPMaxLevel() {
+        InitializeOrNoop();
+
         AMCOPPCommand copp_cmd;
-        
 
         ZeroMemory(&copp_cmd, sizeof(copp_cmd));
         auto spl_cd = (DXVA_COPPSetProtectionLevelCmdData*)&copp_cmd.CommandData;
@@ -722,29 +716,50 @@ public:
         HRESULT_THROW(com_copp->ProtectionCommand(&copp_cmd));
     }
 
-    int GetHDCPLevel() {
+    int GetLocalHDCPLevel() {
+        InitializeOrNoop();
+
         AMCOPPStatusInput i;
         AMCOPPStatusOutput o;
         ZeroMemory(&i, sizeof(i));
         ZeroMemory(&o, sizeof(o));
         ((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_HDCP;
         i.cbSizeData = 4;
-        //i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
         i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
+        i.dwSequence = u_status_seq++;
+        HRESULT_THROW(com_copp->ProtectionStatus(&i, &o));
+
+        auto reply = (DXVA_COPPStatusData*)&o.COPPStatus[0];
+
+        return reply->dwData;
+    }
+
+    int GetGlobalHDCPLevel() {
+        InitializeOrNoop();
+
+        AMCOPPStatusInput i;
+        AMCOPPStatusOutput o;
+        ZeroMemory(&i, sizeof(i));
+        ZeroMemory(&o, sizeof(o));
+        ((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_HDCP;
+        i.cbSizeData = 4;
+        i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
+        //i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
         i.dwSequence = u_status_seq++;
         HRESULT_THROW(com_copp->ProtectionStatus(&i, &o));
         
         auto reply = (DXVA_COPPStatusData*)&o.COPPStatus[0];
 
-        return range_check<int, ULONG>(
-            reply->dwData,
-            0,
-            1
-        );
+        return reply->dwData;
     }
 
     ~HDCPHelper() {
     }
+};
+
+struct HDCPStatus {
+    int global;
+    int local;
 };
 
 class System {
@@ -777,7 +792,7 @@ public:
                 << e.GetMessage() << " [" << GetLastError() << "]"
                 << "LastError [" << last_error << "]: " << mbuf.data();
             log_write(s.str());
-            throw ProcessFailure(s.str());
+            //throw ProcessFailure(s.str());
         }
     }
 
@@ -802,17 +817,22 @@ public:
         }
     }
 
-    void hdcp_interval_work() {
+    int hdcp_interval_work(HDCPStatus &status) {
         try {
-            int hdcp_pre_level = hdcp->GetHDCPLevel();
+            int hdcp_local_pre_level = hdcp->GetLocalHDCPLevel();
+            int hdcp_local_post_level = hdcp_local_pre_level;
 
-            hdcp_level_notify(hdcp_pre_level);
+            hdcp_level_notify(hdcp_local_pre_level);
 
-            if (hdcp_pre_level == 0) {
-                hdcp->SetHDCPMaxLevel();
-                int hdcp_post_level = hdcp->GetHDCPLevel();
-                hdcp_level_notify(hdcp_post_level);
+            if (hdcp_local_pre_level == 0) {
+                hdcp->RequestHDCPMaxLevel();
+                hdcp_local_post_level = hdcp->GetLocalHDCPLevel();
+                hdcp_level_notify(hdcp_local_post_level);
             }
+
+            status.local = hdcp_local_post_level;
+            status.global = hdcp->GetGlobalHDCPLevel();
+            return 1;
         }
         catch (ProcessFailure e) {
             std::ostringstream s;
@@ -827,6 +847,10 @@ public:
                 s << "HDCP Process Failure on Reinit: " << e.GetMessage();
                 log_write(s.str());
             }
+
+            status.local = -1;
+            status.global = -1;
+            return 0;
         }
     }
 };
@@ -900,12 +924,12 @@ ATOM MyRegisterClass(HINSTANCE hInstance)
     wcex.cbClsExtra     = 0;
     wcex.cbWndExtra     = 0;
     wcex.hInstance      = hInstance;
-    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_TEST));
+    wcex.hIcon          = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
     wcex.hCursor        = LoadCursor(nullptr, IDC_ARROW);
     wcex.hbrBackground  = (HBRUSH)(COLOR_WINDOW+1);
     wcex.lpszMenuName   = MAKEINTRESOURCEW(IDC_TEST);
     wcex.lpszClassName  = szWindowClass;
-    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
+    wcex.hIconSm        = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_ICON1));
 
     return RegisterClassExW(&wcex);
 }
@@ -924,8 +948,10 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
 {
    hInst = hInstance; // Store instance handle in our global variable
 
-   HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
-      CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+   //HWND hWnd = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW,
+   //   CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, hInstance, nullptr);
+
+   HWND hWnd = CreateDialogW(NULL, MAKEINTRESOURCE(IDD_ABOUTBOX), NULL, WndProc);
 
    if (!hWnd)
    {
@@ -938,6 +964,42 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    SetTimer(hWnd, IDT_TIMER1, 100, (TIMERPROC)NULL);
 
    return TRUE;
+}
+
+void DoTimerWork(HWND hWnd) {
+    HDCPStatus hdcp_status;
+    int ret = g_sys->hdcp_interval_work(hdcp_status);
+
+    char status_msg[255];
+
+    if (ret) {
+        switch (hdcp_status.global) {
+        case 0:
+            sprintf_s(&status_msg[0], sizeof(status_msg), "HDCP Not Enabled");
+            break;
+        default:
+            sprintf_s(&status_msg[0], sizeof(status_msg), "HDCP Enabled [%i]", hdcp_status.global);
+            break;
+        }
+
+        SetDlgItemTextA(hWnd, IDC_STATUS_MSG_GLOBAL, &status_msg[0]);
+
+        switch (hdcp_status.local) {
+        case 0:
+            sprintf_s(&status_msg[0], sizeof(status_msg), "HDCP Not Enabled");
+            break;
+        default:
+            sprintf_s(&status_msg[0], sizeof(status_msg), "HDCP Enabled [%i]", hdcp_status.local);
+            break;
+        }
+
+        SetDlgItemTextA(hWnd, IDC_STATUS_MSG_LOCAL, &status_msg[0]);
+    }
+    else {
+        sprintf_s(&status_msg[0], sizeof(status_msg), "Initialization Failure");
+        SetDlgItemTextA(hWnd, IDC_STATUS_MSG_GLOBAL, &status_msg[0]);
+        SetDlgItemTextA(hWnd, IDC_STATUS_MSG_LOCAL, &status_msg[0]);
+    }
 }
 
 //
@@ -957,7 +1019,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_TIMER:
         switch (wParam) {
             case IDT_TIMER1:
-                g_sys->hdcp_interval_work();
+                DoTimerWork(hWnd);
                 break;
         }
         break;

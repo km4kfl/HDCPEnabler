@@ -45,5 +45,8 @@
     <Image Include="test.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="..\..\..\frita\OneDrive\Desktop\mcguiredatasystems\web\logo.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
