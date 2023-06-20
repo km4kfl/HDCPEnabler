@@ -98,15 +98,17 @@ public:
     }
 
     void fuzz_interval_work() {
-        try {
-            monitor_fuzz.RandomlyOffsetDrive(0.1f);
-        }
-        catch (ProcessFailure e) {
-            // Let old object deconstruct and release resources. Next time,
-            // we will try to call the above function and it will do a lazy
-            // initialization or fail again to this point.
-            monitor_fuzz = MonitorFuzz();
-        }
+        #ifndef HDCPENABLERPROGRAM_NOMONITORFUZZ
+            try {
+                monitor_fuzz.RandomlyOffsetDrive(0.1f);
+            }
+            catch (ProcessFailure e) {
+                // Let old object deconstruct and release resources. Next time,
+                // we will try to call the above function and it will do a lazy
+                // initialization or fail again to this point.
+                monitor_fuzz = MonitorFuzz();
+            }
+        #endif
     }
 
     int hdcp_interval_work(HDCPStatus &status) {
