@@ -1,14 +1,3 @@
-//
-// COPYRIGHT (c) 2023 L. K. McGuire Jr.
-// ALL RIGHTS RESERVED
-// 
-// THIS PROGRAM MAY BE FREELY USED BY THE U.S. GOVERNMENT. THE U.S.
-// GOVERNMENT MAY DERIVE FROM, RETRANSMIT, RELICENSE, OR USE THIS
-// SOFTWARE IN ANY WAY, SHAPE OR FORM. ANY DISPUTES OR ISSUES SHOULD 
-// BE RESOLVED BY A JUDGE IN U.S. TERRITORY AND THIS JUDGE SHOULD 
-// RULE IN THE BEST INTEREST OF ALL PARTIES.
-// 
-
 #include "framework.h"
 #include "Resource.h"
 
@@ -37,7 +26,7 @@ private:
     std::ofstream log_stream;
     int hdcp_last_level;
 public:
-    std::unique_ptr<HDCPHelper> hdcp;
+    HDCPHelper hdcp;
     MonitorFuzz monitor_fuzz;
 
     System() : 
@@ -45,39 +34,9 @@ public:
         hdcp_last_level(-1),
         monitor_fuzz()
     {
-        // TODO: clean this up; I don't think HDCPHelper can throw
-        //       an exception in the constructor anymore. It has a
-        //       delayed initialization now.
-        try {
-            hdcp = std::unique_ptr<HDCPHelper>(new HDCPHelper());
-        }
-        catch (ProcessFailure e) {
-            auto mbuf = std::vector<CHAR>(1024);
-            auto last_error = GetLastError();
-
-            BOOL_THROW(mbuf.capacity() < 0xffffff);
-
-            FormatMessageA(
-                FORMAT_MESSAGE_FROM_SYSTEM,
-                0,
-                last_error,
-                0,
-                mbuf.data(),
-                (DWORD)mbuf.capacity(),
-                0
-            );
-
-            std::ostringstream s;
-            s << "Constructor(System) Process Failure for HDCPHelper: "
-                << e.Message() << " [" << GetLastError() << "]"
-                << "LastError [" << last_error << "]: " << mbuf.data();
-            log_write(s.str());
-            //throw ProcessFailure(s.str());
-        }
     }
 
     ~System() {
-
     }
 
     void log_write(std::string msg) {
@@ -113,19 +72,19 @@ public:
 
     int hdcp_interval_work(HDCPStatus &status) {
         try {
-            int hdcp_local_pre_level = hdcp->GetLocalHDCPLevel();
+            int hdcp_local_pre_level = hdcp.GetLocalHDCPLevel();
             int hdcp_local_post_level = hdcp_local_pre_level;
 
             hdcp_level_notify(hdcp_local_pre_level);
 
             if (hdcp_local_pre_level == 0) {
-                hdcp->RequestHDCPMaxLevel();
-                hdcp_local_post_level = hdcp->GetLocalHDCPLevel();
+                hdcp.RequestHDCPMaxLevel();
+                hdcp_local_post_level = hdcp.GetLocalHDCPLevel();
                 hdcp_level_notify(hdcp_local_post_level);
             }
 
             status.local = hdcp_local_post_level;
-            status.global = hdcp->GetGlobalHDCPLevel();
+            status.global = hdcp.GetGlobalHDCPLevel();
             return 1;
         }
         catch (ProcessFailure e) {
@@ -133,14 +92,7 @@ public:
             s << "HDCP Process Failure: " << e.Message() << " [" << GetLastError() << "]";
             log_write(s.str());
 
-            try {
-                hdcp = std::unique_ptr<HDCPHelper>(new HDCPHelper());
-            }
-            catch (ProcessFailure e) {
-                s = std::ostringstream();
-                s << "HDCP Process Failure on Reinit: " << e.Message();
-                log_write(s.str());
-            }
+            hdcp = HDCPHelper();
 
             status.local = -1;
             status.global = -1;
