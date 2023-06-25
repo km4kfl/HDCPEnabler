@@ -1,6 +1,8 @@
 #include "framework.h"
 #include "Resource.h"
 
+#include <CommCtrl.h>
+
 #include <optional>
 #include <memory>
 #include <vector>
@@ -25,6 +27,8 @@ class System {
 private:
     std::ofstream log_stream;
     int hdcp_last_level;
+    bool fuzz_enabled;
+    float fuzz_ratio;
 public:
     HDCPHelper hdcp;
     MonitorFuzz monitor_fuzz;
@@ -32,7 +36,9 @@ public:
     System() : 
         log_stream("hdcp_log.txt"), 
         hdcp_last_level(-1),
-        monitor_fuzz()
+        monitor_fuzz(),
+        fuzz_enabled(true),
+        fuzz_ratio(0.1f)
     {
     }
 
@@ -56,10 +62,25 @@ public:
         }
     }
 
+    void set_fuzz_ratio(float ratio) {
+        fuzz_ratio = ratio;
+    }
+
+    void set_fuzz_enabled(bool enabled) {
+        fuzz_enabled = enabled;
+    }
+
+    void reset_monitor() {
+        monitor_fuzz.ResetMonitor();
+    }
+
     void fuzz_interval_work() {
+        if (!fuzz_enabled)
+            return;
+
         #ifndef HDCPENABLERPROGRAM_NOMONITORFUZZ
             try {
-                monitor_fuzz.RandomlyOffsetDrive(0.1f);
+                monitor_fuzz.RandomlyOffsetDrive(fuzz_ratio);
             }
             catch (ProcessFailure e) {
                 // Let old object deconstruct and release resources. Next time,
@@ -124,6 +145,8 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     UNREFERENCED_PARAMETER(hPrevInstance);
     UNREFERENCED_PARAMETER(lpCmdLine);
 
+    g_sys = std::unique_ptr<System>(new System());
+
     // Initialize global strings
     LoadStringW(hInstance, IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
     LoadStringW(hInstance, IDC_TEST, szWindowClass, MAX_LOADSTRING);
@@ -136,8 +159,6 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance,
     }
 
     HACCEL hAccelTable = LoadAccelerators(hInstance, MAKEINTRESOURCE(IDC_TEST));
-
-    g_sys = std::unique_ptr<System>(new System());
 
     MSG msg;
 
@@ -279,6 +300,16 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+            case IDC_BUTTON_RESET_MONITOR:
+                g_sys->reset_monitor();
+                break;
+            case IDC_CHECK_FUZZ:
+                if (SendDlgItemMessage(hWnd, IDC_CHECK_FUZZ, BM_GETCHECK, 0, 0) == BST_CHECKED) {
+                    g_sys->set_fuzz_enabled(true);
+                } else {
+                    g_sys->set_fuzz_enabled(false);
+                }
+                break;
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
@@ -301,6 +332,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
+    case WM_NOTIFY:
+    {
+        switch (wParam) {
+            case IDC_SLIDER_FUZZ:
+            {
+                int pos = (int)SendDlgItemMessage(hWnd, IDC_SLIDER_FUZZ, TBM_GETPOS, 0, 0);
+                g_sys->set_fuzz_ratio((float)pos / 100.0f);
+                char buf[32];
+                sprintf_s(&buf[0], sizeof(buf), "%i%%", pos);
+                SetDlgItemTextA(hWnd, IDC_TEXT_FUZZING_RATIO, &buf[0]);
+                break;
+            }
+        }
+    }
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }

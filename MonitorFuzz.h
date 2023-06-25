@@ -29,6 +29,7 @@ private:
 	void Initialize();
 public:
 	MonitorFuzz();
+	void ResetMonitor();
 	void RandomlyOffsetDrive(float adjust_amount);
 };
 

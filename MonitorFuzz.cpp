@@ -66,6 +66,14 @@ static BOOL monitor_enum_proc(
 	return TRUE;
 }
 
+void MonitorFuzz::ResetMonitor() {
+	Initialize();
+
+	HANDLE phy_monitor = phy_monitors.GetMonitorHandle(0);
+
+	BOOL_THROW(RestoreMonitorFactoryDefaults(phy_monitor));
+}
+
 void MonitorFuzz::RandomlyOffsetDrive(float adjust_amount) {
 	// Attempts initialization if not already done. Lazy init.
 	Initialize();
