@@ -15,12 +15,7 @@
 #define IDT_TIMER2                      151
 #define IDC_STATUS_MSG_GLOBAL           1001
 #define IDC_STATUS_MSG_LOCAL            1002
-#define IDC_CHECK_FUZZ                  1003
-#define IDC_BUTTON1                     1004
 #define IDC_BUTTON_RESET_MONITOR        1004
-#define IDC_SLIDER_FUZZ                 1005
-#define IDC_TEXT_FUZZING_RATIO          1006
-#define IDC_GROUP_FUZZ                  1007
 #define IDC_STATIC                      -1
 
 // Next default values for new objects

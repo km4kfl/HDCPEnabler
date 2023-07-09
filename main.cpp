@@ -37,7 +37,7 @@ public:
         log_stream("hdcp_log.txt"), 
         hdcp_last_level(-1),
         monitor_fuzz(),
-        fuzz_enabled(true),
+        fuzz_enabled(false),
         fuzz_ratio(0.1f)
     {
     }
@@ -72,23 +72,6 @@ public:
 
     void reset_monitor() {
         monitor_fuzz.ResetMonitor();
-    }
-
-    void fuzz_interval_work() {
-        if (!fuzz_enabled)
-            return;
-
-        #ifndef HDCPENABLERPROGRAM_NOMONITORFUZZ
-            try {
-                monitor_fuzz.RandomlyOffsetDrive(fuzz_ratio);
-            }
-            catch (ProcessFailure e) {
-                // Let old object deconstruct and release resources. Next time,
-                // we will try to call the above function and it will do a lazy
-                // initialization or fail again to this point.
-                monitor_fuzz = MonitorFuzz();
-            }
-        #endif
     }
 
     int hdcp_interval_work(HDCPStatus &status) {
@@ -228,8 +211,7 @@ BOOL InitInstance(HINSTANCE hInstance, int nCmdShow)
    ShowWindow(hWnd, nCmdShow);
    UpdateWindow(hWnd);
 
-   SetTimer(hWnd, IDT_TIMER1, 100, (TIMERPROC)NULL);
-   SetTimer(hWnd, IDT_TIMER2, 5000, (TIMERPROC)NULL);
+   SetTimer(hWnd, IDT_TIMER1, 500, (TIMERPROC)NULL);
 
    return TRUE;
 }
@@ -289,9 +271,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             case IDT_TIMER1:
                 DoTimerWork(hWnd);
                 break;
-            case IDT_TIMER2:
-                g_sys->fuzz_interval_work();
-                break;
         }
         break;
     case WM_COMMAND:
@@ -300,6 +279,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             // Parse the menu selections:
             switch (wmId)
             {
+            /*
             case IDC_BUTTON_RESET_MONITOR:
                 g_sys->reset_monitor();
                 break;
@@ -310,6 +290,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                     g_sys->set_fuzz_enabled(false);
                 }
                 break;
+            */
             case IDM_ABOUT:
                 DialogBox(hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
                 break;
@@ -332,6 +313,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_DESTROY:
         PostQuitMessage(0);
         break;
+    /*
     case WM_NOTIFY:
     {
         switch (wParam) {
@@ -346,6 +328,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
             }
         }
     }
+    */
     default:
         return DefWindowProc(hWnd, message, wParam, lParam);
     }

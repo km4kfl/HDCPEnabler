@@ -33,7 +33,8 @@ private:
     void Initialize();
     void InitializeOrNoop();
 public:
-    HDCPHelper& operator=(HDCPHelper&& other) noexcept;
+    HDCPHelper& operator=(HDCPHelper&& other) = default;
+    //HDCPHelper& operator=(HDCPHelper& other) = delete;
     HDCPHelper();
     void RequestHDCPMaxLevel();
     int GetLocalHDCPLevel();

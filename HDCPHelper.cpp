@@ -231,9 +231,9 @@ void HDCPHelper::InitializeOrNoop() {
     }
 }
 
-HDCPHelper& HDCPHelper::operator=(HDCPHelper&& other) noexcept {
-    return *this;
-}
+//HDCPHelper& HDCPHelper::operator=(HDCPHelper&& other) noexcept {
+//    return *this;
+//}
 
 HDCPHelper::HDCPHelper() {
     initialized = false;
