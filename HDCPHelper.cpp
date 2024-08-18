@@ -244,6 +244,10 @@ HDCPHelper::HDCPHelper() {
 
 void HDCPHelper::RequestHDCPMaxLevel() {
     InitializeOrNoop();
+    
+    //if (true) {
+    //    return;
+    //} 
 
     AMCOPPCommand copp_cmd;
 
@@ -251,6 +255,9 @@ void HDCPHelper::RequestHDCPMaxLevel() {
     auto spl_cd = (DXVA_COPPSetProtectionLevelCmdData*)&copp_cmd.CommandData;
     spl_cd->ProtType = COPP_ProtectionType_HDCP;
     spl_cd->ProtLevel = COPP_HDCP_LevelMax;
+
+    //spl_cd->ProtType = COPP_ProtectionType_DPCP;
+    //spl_cd->ProtLevel = COPP_DPCP_LevelMax;
 
     copp_cmd.guidCommandID = DXVA_COPPSetProtectionLevel;
     copp_cmd.dwSequence = u_command_seq++;
@@ -266,6 +273,7 @@ void HDCPHelper::RequestHDCPMaxLevel() {
     ));
 
     HRESULT_THROW(com_copp->ProtectionCommand(&copp_cmd));
+    
 }
 
 int HDCPHelper::GetLocalHDCPLevel() {
@@ -276,6 +284,7 @@ int HDCPHelper::GetLocalHDCPLevel() {
     ZeroMemory(&i, sizeof(i));
     ZeroMemory(&o, sizeof(o));
     ((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_HDCP;
+    //((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_DPCP;
     i.cbSizeData = 4;
     i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
     i.dwSequence = u_status_seq++;
@@ -294,9 +303,10 @@ int HDCPHelper::GetGlobalHDCPLevel() {
     ZeroMemory(&i, sizeof(i));
     ZeroMemory(&o, sizeof(o));
     ((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_HDCP;
+    //((DWORD*)&i.StatusData)[0] = COPP_ProtectionType_DPCP;
     i.cbSizeData = 4;
     i.guidStatusRequestID = DXVA_COPPQueryGlobalProtectionLevel;
-    //i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
+    i.guidStatusRequestID = DXVA_COPPQueryLocalProtectionLevel;
     i.dwSequence = u_status_seq++;
     HRESULT_THROW(com_copp->ProtectionStatus(&i, &o));
 
